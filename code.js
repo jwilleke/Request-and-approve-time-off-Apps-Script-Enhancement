@@ -26,16 +26,26 @@
 //   - optFirstDataRowIndex: index of the first row where data should be written. This
 //     defaults to the row immediately below the headers.
 
+function testing() {
+  Logger.log("Getting Permissions");
+}
+
+/**
+ * 
+ */
 function setRowData(sheet, object, optHeadersRange) {
-  Logger.log("Writing at row index "+object.__rowIndex_);
+  Logger.log("Writing at row index " + object.__rowIndex_);
   Logger.log(object);
   setRowsData(sheet, [object], optHeadersRange, object.__row_);
 }
 
+/**
+ * 
+ */
 function setRowsData(sheet, objects, optHeadersRange, optFirstDataRowIndex) {
   var headersRange = optHeadersRange || sheet.getRange(1, 1, 1, sheet.getMaxColumns());
   var firstDataRowIndex = optFirstDataRowIndex || headersRange.getRowIndex() + 1;
-  Logger.log("fdri="+firstDataRowIndex);
+  Logger.log("fdri=" + firstDataRowIndex);
   var headers = normalizeHeaders(headersRange.getValues()[0]);
 
   var data = [];
@@ -48,7 +58,7 @@ function setRowsData(sheet, objects, optHeadersRange, optFirstDataRowIndex) {
         values.push(0);
       }
       // If the header is empty or the object value is empty...
-      else if ((!(header.length > 0)) || (objects[i][header]=='')) {
+      else if ((!(header.length > 0)) || (objects[i][header] == '')) {
         values.push('');
       }
       else {
@@ -57,9 +67,9 @@ function setRowsData(sheet, objects, optHeadersRange, optFirstDataRowIndex) {
     }
     data.push(values);
   }
-  
+
   var destinationRange = sheet.getRange(firstDataRowIndex, headersRange.getColumnIndex(),
-                                        objects.length, headers.length);
+    objects.length, headers.length);
   destinationRange.setValues(data);
 }
 
@@ -74,7 +84,7 @@ function setRowsData(sheet, objects, optHeadersRange, optFirstDataRowIndex) {
 //       This argument is optional and it defaults to the row immediately above range;
 // Returns an Array of objects.
 function getRowsData(sheet, range, columnHeadersRowIndex) {
-  
+
   Logger.log("getRowsData");
   var headersIndex = columnHeadersRowIndex || range ? range.getRowIndex() - 1 : 1;
   var dataRange = range ||
@@ -104,7 +114,7 @@ function getObjects(data, keys) {
       hasData = true;
     }
     // Increment 1 for the header row, and one more so that it matches the spreadsheet.
-    object.__row_ = 2+i;
+    object.__row_ = 2 + i;
     if (hasData) {
       objects.push(object);
     }
@@ -120,7 +130,7 @@ function normalizeHeaders(headers) {
   var keys = [];
   for (var i = 0; i < headers.length; ++i) {
     keys.push(normalizeHeader(headers[i]));
-    Logger.log("string: "+headers[i]);
+    Logger.log("string: " + headers[i]);
   }
   return keys;
 }
@@ -156,7 +166,7 @@ function normalizeHeader(header) {
       key += letter.toLowerCase();
     }
   }
-  
+
   //Logger.log("header: "+key);
   return key;
 }
@@ -165,7 +175,7 @@ function normalizeHeader(header) {
 // Arguments:
 //   - cellData: string
 function isCellEmpty(cellData) {
-  return typeof(cellData) == "string" && cellData == "";
+  return typeof (cellData) == "string" && cellData == "";
 }
 
 // Returns true if the character char is alphabetical, false otherwise.
@@ -181,163 +191,188 @@ function isDigit(char) {
 }
 
 
-// Configurable Values
-var SPREADSHEET_KEY = "18e6vNi3CHKp1SScdg43qvK7FONgEiTxpUkkKBKdQvps";
-var RESPONSES_SHEET = "Form Responses 1";
+
+/**
+ * Configurable Values for you specific environment
+ * These were originally "var" but changed them to const
+ */
+var SPREADSHEET_KEY = "your sheet key";
+// The Apps Script MUST be deployed and this is the Web app URL - without the /exec (who knows why)
+var SCRIPT_URL = "https://script.google.com/macros/s/" + "your deployed web app script url;
+// The sheet where the form writes the responses
+var RESPONSES_SHEET = "Form Responses 4";
+// sheet where we log somethings???
 var LOG_SHEET = "Execution Log";
+// sheet where there are some settings but not all?
 var SETTINGS_SHEET = "__Settings";
+// not at all sure what the following is for 
 var CACHE_SETTINGS = false;
 var SETTINGS_CACHE_TTL = 900;
-
 // Constants
+
+/**
+ * Constants 
+ */
+// Used in processSheet()
 var BLANK_STATE = undefined;
+// used in SheetHandler(sheet)
 var PENDING_STATE = "PENDING";
 var APPROVED_STATE = "APPROVED";
 var DENIED_STATE = "DENIED";
-var EMAIL_REGEX = new RegExp("[a-zA-Z+0-9\.-]+@[a-zA-Z0-9\.-]+", 'i'); 
+var EMAIL_REGEX = new RegExp("[a-zA-Z+0-9\.-]+@[a-zA-Z0-9\.-]+", 'i');
 
 // Globals
 var cache = JSONCacheService();
 var SETTINGS = getSettings();
 
+/**
+ * 
+ */
 function JSONCacheService() {
   var _cache = CacheService.getPublicCache();
   var _key_prefix = "_json#";
-  
-  var get = function(k) {
-    var payload = _cache.get(_key_prefix+k);
-    if(payload !== undefined) {
+
+  var get = function (k) {
+    var payload = _cache.get(_key_prefix + k);
+    if (payload !== undefined) {
       JSON.parse(payload);
     }
     return payload
   }
-  
-  var put = function(k, d, t) {
-    _cache.put(_key_prefix+k, JSON.stringify(d), t);
+
+  var put = function (k, d, t) {
+    _cache.put(_key_prefix + k, JSON.stringify(d), t);
   }
-  
+
   return {
     'get': get,
     'put': put
   }
 }
 
-function getSettings() { 
-  if(CACHE_SETTINGS) {
+/**
+ * 
+ */
+function getSettings() {
+  if (CACHE_SETTINGS) {
     var settings = cache.get("_settings");
   }
-  
-  if(settings == undefined) {
+  if (settings == undefined) {
     var sheet = getSpreadsheet().getSheetByName(SETTINGS_SHEET);
     var values = sheet.getDataRange().getValues();
-  
     var settings = {};
     for (var i = 1; i < values.length; i++) {
       var row = values[i];
       settings[row[0]] = row[1];
     }
-    
     cache.put("_settings", settings, SETTINGS_CACHE_TTL);
   }
   return settings;
 }
 
-function Utils() {}
-Utils.generateUUID = function() {
+/**
+ * 
+ */
+function Utils() { }
+Utils.generateUUID = function () {
   var d = new Date().getTime();
-  var uuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-    var r = (d + Math.random()*16)%16 | 0;
-    d = Math.floor(d/16);
-    return (c=='x' ? r : (r&0x7|0x8)).toString(16);
+  var uuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+    var r = (d + Math.random() * 16) % 16 | 0;
+    d = Math.floor(d / 16);
+    return (c == 'x' ? r : (r & 0x7 | 0x8)).toString(16);
   });
   return uuid;
 }
-  
-Utils.processTemplate = function(template, object) {
+
+/**
+ * 
+ */
+Utils.processTemplate = function (template, object) {
   // Do a cheap string replace on several template values.
-  if(template == undefined) {
+  if (template == undefined) {
     return "NOT DEFINED";
   }
-  for(var k in object) {
-     var objectForPrint = object[k];
-     if (object[k] instanceof Date) {  
+  for (var k in object) {
+    var objectForPrint = object[k];
+    if (object[k] instanceof Date) {
       objectForPrint = object[k].toDateString();
-    } else {  
+    } else {
       objectForPrint = object[k];
     }
     template = template.replace(SETTINGS.TEMPLATE_OPEN_TAG + k + SETTINGS.TEMPLATE_CLOSE_TAG, objectForPrint);
-    
+
   }
   return template
 }
 
+/**
+ * 
+ */
 function getSpreadsheet() {
   return SpreadsheetApp.openById(SPREADSHEET_KEY);
 }
 
+/**
+ * 
+ */
 function SheetHandler(sheet) {
   var _sheet = sheet;
   var _data = getRowsData(_sheet);
-  
-  var _markPending = function(d) {
-    
+  var _markPending = function (d) {
     d.state = PENDING_STATE;
     d.identifier = Utils.generateUUID();
-    
     manager_email = d[SETTINGS.MANAGERS_EMAIL_COLUMN_NAME].match(EMAIL_REGEX);
-    
-    var scriptUri = ScriptApp.getService().getUrl();
+    // take the script URL and add this on to it?
+    var scriptUri = SCRIPT_URL + "/exec";
     // hack some values on to the data just for email templates.
     d.approval_url = scriptUri + "?i=" + d.identifier + '&state=' + APPROVED_STATE;
+    Logger.log("d.approval_url: " + d.approval_url);
     d.deny_url = scriptUri + "?i=" + d.identifier + '&state=' + DENIED_STATE;
+    Logger.log("d.deny_url: "+ d.deny_url);
     d.manager_email = manager_email
-
+    Logger.log("d.manager_email: "+ d.manager_email);
     message = Utils.processTemplate(SETTINGS.PENDING_MANAGER_EMAIL, d);
     subject = Utils.processTemplate(SETTINGS.PENDING_MANAGER_EMAIL_SUBJECT, d);
-    
-    MailApp.sendEmail(manager_email,subject,"",{ htmlBody: message });
-    
+    MailApp.sendEmail(manager_email, subject, "", { htmlBody: message });
     setRowData(_sheet, d);
   }
-  
-  var _getDataByKey = function(k) {
+
+  var _getDataByKey = function (k) {
     row = undefined;
-    _data.forEach(function(d) {
+    _data.forEach(function (d) {
       if (d.identifier == k) {
         row = d;
       }
     });
     return row;
   }
-  
-  var processSheet = function() {
-    _data.forEach(function(d) {
-      if(d.state == BLANK_STATE) {
+
+  var processSheet = function () {
+    _data.forEach(function (d) {
+      if (d.state == BLANK_STATE) {
         _markPending(d);
       }
     });
   }
-  
-  var _createCalendarEventForDataRow = function(d) {
+
+  var _createCalendarEventForDataRow = function (d) {
     // default to the user's calendar, unless we figure out other wise.
-    var calendarId = d.emailAddress;
+    var calendarId = d.email;
     var guests = new Array();
-    
     if (SETTINGS.WRITE_TO_GROUP_CALENDAR == 1) {
       // The group calendar owns the event, invite the user.
       var calendarId = SETTINGS.GROUP_CALENDAR_ID;
-      guests.push(d.emailAddress);
+      guests.push(d.email);
     }
-    
     if (SETTINGS.INVITE_MANAGER_TO_EVENT == 1) {
       // Regardless of where the event is, invite the manager if requested.
       guests.push(d.actor);
     }
-    
+
     var title = Utils.processTemplate(SETTINGS.CALENDAR_EVENT_TITLE, d);
     var description = Utils.processTemplate(SETTINGS.CALENDAR_EVENT_DESCRIPTION, d);
     var location = Utils.processTemplate(SETTINGS.CALENDAR_EVENT_LOCATION, d);
-    
+
     // Create a recurring daily event.
     var calendar = CalendarApp.getCalendarById(calendarId);
     Logger.log(calendarId);
@@ -351,40 +386,40 @@ function SheetHandler(sheet) {
     });
     Logger.log(event.getId());
   }
-  
-  var approveByKey = function(k, user) {
+
+  var approveByKey = function (k, user) {
     var d = _getDataByKey(k);
     d.state = APPROVED_STATE;
     d.actor = user;
-    
+
     var message = Utils.processTemplate(SETTINGS.USER_APPROVAL_EMAIL, d);
     var subject = Utils.processTemplate(SETTINGS.USER_APPROVAL_EMAIL_SUBJECT, d);
-    MailApp.sendEmail(d.emailAddress,subject,"",{ htmlBody: message });
-    
-    if(SETTINGS.SEND_APPROVAL_NOTICE_EMAIL == 1) {
+    MailApp.sendEmail(d.email, subject, "", { htmlBody: message });
+
+    if (SETTINGS.SEND_APPROVAL_NOTICE_EMAIL == 1) {
       var message = Utils.processTemplate(SETTINGS.APPROVAL_NOTICE_EMAIL, d);
       var subject = Utils.processTemplate(SETTINGS.APPROVAL_NOTICE_EMAIL_SUBJECT, d);
-      MailApp.sendEmail(SETTINGS.APPROVAL_NOTICE_EMAIL_TO, subject, "",{ htmlBody: message });
+      MailApp.sendEmail(SETTINGS.APPROVAL_NOTICE_EMAIL_TO, subject, "", { htmlBody: message });
     }
-    
+
     Logger.log(SETTINGS);
     if (SETTINGS.CREATE_CALENDAR_EVENT == 1) {
       Logger.log("Creating Calendar Event");
       _createCalendarEventForDataRow(d);
     }
-    
+
     setRowData(_sheet, d);
   }
-  
-  var denyByKey = function(k, user) {
+
+  var denyByKey = function (k, user) {
     var d = _getDataByKey(k);
     d.state = DENIED_STATE;
     d.actor = user;
-    
+
     message = Utils.processTemplate(SETTINGS.USER_DENIED_EMAIL, d);
     subject = Utils.processTemplate(SETTINGS.USER_DENIED_EMAIL_SUBJECT, d);
-    MailApp.sendEmail(d.emailAddress, subject, "",{ htmlBody: message });
-    
+    MailApp.sendEmail(d.email, subject, "", { htmlBody: message });
+
     setRowData(_sheet, d);
   }
 
@@ -395,11 +430,17 @@ function SheetHandler(sheet) {
   }
 };
 
+/**
+ * 
+ */
 function authorize() {
   var mail = MailApp.getRemainingDailyQuota();
   var calendar = CalendarApp.getAllCalendars();
 }
 
+/**
+ * 
+ */
 function mockGet() {
   var request = {
     'parameters': {
@@ -413,36 +454,40 @@ function mockGet() {
 function doGet(request) {
   var sheet = getSpreadsheet().getSheetByName(RESPONSES_SHEET);
   var handler = SheetHandler(sheet);
-  
+
   var user = Session.getActiveUser().getEmail();
-  
-  if(request.parameters.state == APPROVED_STATE) {
+
+  if (request.parameters.state == APPROVED_STATE) {
     handler.approveByKey(request.parameters.i, user);
   }
-  
-  if(request.parameters.state == DENIED_STATE) {
+
+  if (request.parameters.state == DENIED_STATE) {
     handler.denyByKey(request.parameters.i, user);
   }
-  
+
   return ContentService.createTextOutput(SETTINGS.CONFIRMATION_PAGE_TEMPLATE);
 }
 
+/**
+ * Runs when form is submitted
+ * Assuming you really did add a Trigger
+ */
 function onFormSubmit() {
   Logger.log("Good afternoon, Good Evening and Good night");
   var sheet = getSpreadsheet().getSheetByName(RESPONSES_SHEET);
   handler = SheetHandler(sheet);
-  handler.processSheet();
+  handler.processSheet(); // for any entry with BLANK_STATE mark it pending
   writeToLog();
-  
 };
 
-
-function writeToLog(){
-  
+/**
+ * Write to the log in Speadsheet on the tab "LOG_SHEET"
+ */
+function writeToLog() {
   // write the Drive file link to the Drive File Report Tab for safe keeping/logging purposes
   var reportSheet = getSpreadsheet().getSheetByName(LOG_SHEET);
-  Logger.log("passed:" +reportSheet.getName());
-  
+  Logger.log("passed:" + reportSheet.getName());
+
   var dateForLogging = new Date().toLocaleString();
-  reportSheet.appendRow([dateForLogging,Session.getActiveUser().getEmail()]);
+  reportSheet.appendRow([dateForLogging, Session.getActiveUser().getEmail()]);
 }
